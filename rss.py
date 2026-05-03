@@ -158,7 +158,7 @@ with tab_billing:
     col1, col2, col3 = st.columns(3)
     with col1:
         b_client = st.selectbox("Select Client", client_list, key="bill_client")
-        b_rate = st.number_input("Rate per kg (₹)", min_value=0.0, value=10.0, step=0.5)
+        b_rate = st.number_input("Rate per kg (₹)", min_value=0.1, value=10.0, step=0.5)
     with col2:
         b_min_amount = st.number_input("Total Minimum Bill Amount (₹)", min_value=0.0, value=50.0, step=10.0)
     with col3:
@@ -173,17 +173,17 @@ with tab_billing:
         
         total_weight = client_parcels['weight'].sum()
         
-        # Calculate Bill (Handles the Weight vs Minimum logic automatically)
-        calculated_amount = total_weight * b_rate
-        final_amount = max(calculated_amount, b_min_amount)
+        # --- NEW LOGIC: Calculate threshold weight directly ---
+        threshold_weight = b_min_amount / b_rate
         
         st.write("---")
         
-        # Display calculation alerts to the user
-        if calculated_amount > b_min_amount:
-            st.success(f"⚖️ **Weight amount (₹{calculated_amount:.2f}) exceeded the minimum.** Charging by weight.")
+        if total_weight < threshold_weight:
+            final_amount = b_min_amount
+            st.warning(f"🛡️ Total weight ({total_weight:.2f} kg) is less than the minimum threshold of {threshold_weight:.2f} kg. Charging Minimum Amount: ₹{final_amount:.2f}")
         else:
-            st.warning(f"🛡️ **Weight amount (₹{calculated_amount:.2f}) was too low.** Applying Minimum Bill Amount.")
+            final_amount = total_weight * b_rate
+            st.success(f"⚖️ Total weight ({total_weight:.2f} kg) exceeded the {threshold_weight:.2f} kg threshold. Charging by weight: ₹{final_amount:.2f}")
             
         st.metric(label="Final Payable Amount", value=f"₹{final_amount:.2f}")
         

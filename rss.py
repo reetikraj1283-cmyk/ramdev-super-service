@@ -3,6 +3,7 @@ import sqlite3
 import pandas as pd
 from datetime import date
 import datetime
+import streamlit.components.v1 as components
 
 # ==========================================
 # Database Initialization
@@ -12,14 +13,14 @@ DB_NAME = 'ramdev_super_service.db'
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # Client Directory Table (Added GSTIN, Address, Phone)
+    # Client Directory Table 
     c.execute('''CREATE TABLE IF NOT EXISTS clients (
                     id INTEGER PRIMARY KEY AUTOINCREMENT, 
                     client_name TEXT UNIQUE, 
                     client_gstin TEXT,
                     address TEXT,
                     phone TEXT)''')
-    # Daily Parcels Table (Added Destination)
+    # Daily Parcels Table 
     c.execute('''CREATE TABLE IF NOT EXISTS parcels (
                     id INTEGER PRIMARY KEY AUTOINCREMENT, 
                     date TEXT, 
@@ -271,8 +272,8 @@ with tab_billing:
             </div>
             """
             
-            # Display the Invoice Layout
-            st.markdown(invoice_html, unsafe_allow_html=True)
+            # Display the Invoice Layout correctly using the HTML component
+            components.html(invoice_html, height=800, scrolling=True)
             
             # Save to Ledger
             conn = sqlite3.connect(DB_NAME)
@@ -284,7 +285,7 @@ with tab_billing:
             conn.close()
             
             st.success("✅ Bill Generated, saved to Ledger, and ready for printing!")
-            st.info("🖨️ **How to Print/Save as PDF:** Press `Ctrl + P` (Windows) or `Cmd + P` (Mac) on your keyboard, or use the 'Share -> Print' option on your phone to save this exact layout as a PDF.")
+            st.info("🖨️ **How to Print/Save as PDF:** Right-click the invoice and select 'Print' or press `Ctrl + P` to save this layout as a PDF.")
 
 # ------------------------------------------
 # TAB 4: LEDGER

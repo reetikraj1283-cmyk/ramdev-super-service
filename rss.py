@@ -128,6 +128,7 @@ with tab_parcels:
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
             
+            # Duplicate check logic
             c.execute("SELECT 1 FROM parcels WHERE receipt_no = ?", (p_receipt,))
             exists = c.fetchone()
             
@@ -171,10 +172,21 @@ with tab_billing:
         client_parcels = df_p[df_p['client_name'] == b_client]
         
         total_weight = client_parcels['weight'].sum()
+        
+        # Calculate Bill (Handles the Weight vs Minimum logic automatically)
         calculated_amount = total_weight * b_rate
         final_amount = max(calculated_amount, b_min_amount)
         
         st.write("---")
+        
+        # Display calculation alerts to the user
+        if calculated_amount > b_min_amount:
+            st.success(f"⚖️ **Weight amount (₹{calculated_amount:.2f}) exceeded the minimum.** Charging by weight.")
+        else:
+            st.warning(f"🛡️ **Weight amount (₹{calculated_amount:.2f}) was too low.** Applying Minimum Bill Amount.")
+            
+        st.metric(label="Final Payable Amount", value=f"₹{final_amount:.2f}")
+        
         if st.button("Generate & Display Bill"):
             # Fetch Client Details
             client_info = df_c[df_c['client_name'] == b_client].iloc[0]
@@ -299,3 +311,9 @@ with tab_ledger:
     if st.button("Commit Ledger Changes"):
         save_data(edited_ledger, 'ledger')
         st.success("Ledger updated!")
+        
+    # Summary Metrics
+    if not edited_ledger.empty:
+        st.subheader("Financial Summary")
+        total_revenue = edited_ledger['final_bill_amount'].sum()
+        st.metric("Total Billed Revenue", f"₹{total_revenue:.2f}")

@@ -128,7 +128,6 @@ with tab_parcels:
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
             
-            # Duplicate check logic
             c.execute("SELECT 1 FROM parcels WHERE receipt_no = ?", (p_receipt,))
             exists = c.fetchone()
             
@@ -170,10 +169,7 @@ with tab_billing:
     
     if not df_p.empty and b_client in client_list:
         client_parcels = df_p[df_p['client_name'] == b_client]
-        
         total_weight = client_parcels['weight'].sum()
-        
-        # --- NEW LOGIC: Calculate threshold weight directly ---
         threshold_weight = b_min_amount / b_rate
         
         st.write("---")
@@ -188,17 +184,14 @@ with tab_billing:
         st.metric(label="Final Payable Amount", value=f"₹{final_amount:.2f}")
         
         if st.button("Generate & Display Bill"):
-            # Fetch Client Details
             client_info = df_c[df_c['client_name'] == b_client].iloc[0]
             c_gst = client_info['client_gstin'] if client_info['client_gstin'] else "N/A"
             c_add = client_info['address'] if client_info['address'] else "N/A"
             c_ph = client_info['phone'] if client_info['phone'] else "N/A"
             
-            # Generate Invoice Number
             inv_no = f"RSS/{b_year}/{datetime.datetime.now().strftime('%m%d%H%M')}"
             current_date = date.today().strftime("%d-%m-%Y")
             
-            # Build Table Rows for Invoice
             table_rows = ""
             for index, row in client_parcels.iterrows():
                 row_amt = row['weight'] * b_rate
@@ -212,16 +205,13 @@ with tab_billing:
                 </tr>
                 """
             
-            # Construct the HTML Layout
             invoice_html = f"""
             <div style="background-color: white; color: black; padding: 30px; border: 2px solid black; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
-                
                 <h1 style="text-align: center; margin: 0; font-size: 28px; font-weight: bold;">RAMDEV SUPER SERVICE</h1>
                 <p style="text-align: center; margin: 5px 0 0 0; font-size: 14px;">
                     53/54, dulanbi kasam chawl, S.L Matkar Marg, Prabhadevi-400025<br>
                     <strong>GSTIN: 27ADPPR2190E1ZA</strong>
                 </p>
-                
                 <h3 style="text-align: center; text-decoration: underline; margin-top: 15px; margin-bottom: 25px;">MONTHLY INVOICE</h3>
                 
                 <table style="width: 100%; margin-bottom: 20px; font-size: 14px; border: none;">
@@ -283,11 +273,8 @@ with tab_billing:
                 </table>
             </div>
             """
-            
-            # Display the Invoice Layout correctly using the HTML component
             components.html(invoice_html, height=800, scrolling=True)
             
-            # Save to Ledger
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
             c.execute('''INSERT INTO ledger (invoice_no, bill_date, billing_month, client_name, total_weight, applied_rate, min_amount, final_bill_amount)
@@ -312,8 +299,124 @@ with tab_ledger:
         save_data(edited_ledger, 'ledger')
         st.success("Ledger updated!")
         
-    # Summary Metrics
     if not edited_ledger.empty:
         st.subheader("Financial Summary")
         total_revenue = edited_ledger['final_bill_amount'].sum()
         st.metric("Total Billed Revenue", f"₹{total_revenue:.2f}")
+        
+        st.write("---")
+        st.subheader("🖨️ Reprint Old Invoice")
+        
+        # Select an invoice to reprint
+        invoice_list = edited_ledger['invoice_no'].dropna().tolist()
+        if invoice_list:
+            selected_invoice = st.selectbox("Select Invoice Number to Reprint", invoice_list)
+            
+            if st.button("Fetch and Display Invoice"):
+                # Get ledger details
+                record = edited_ledger[edited_ledger['invoice_no'] == selected_invoice].iloc[0]
+                inv_client = record['client_name']
+                inv_date = record['bill_date']
+                inv_month = record['billing_month']
+                inv_weight = record['total_weight']
+                inv_rate = record['applied_rate']
+                inv_min = record['min_amount']
+                inv_final = record['final_bill_amount']
+                
+                # Get client details
+                df_c = load_data('clients')
+                client_info = df_c[df_c['client_name'] == inv_client]
+                if not client_info.empty:
+                    c_gst = client_info.iloc[0]['client_gstin'] if client_info.iloc[0]['client_gstin'] else "N/A"
+                    c_add = client_info.iloc[0]['address'] if client_info.iloc[0]['address'] else "N/A"
+                    c_ph = client_info.iloc[0]['phone'] if client_info.iloc[0]['phone'] else "N/A"
+                else:
+                    c_gst, c_add, c_ph = "N/A", "N/A", "N/A"
+                
+                # Get parcel details
+                df_p = load_data('parcels')
+                client_parcels = df_p[df_p['client_name'] == inv_client]
+                
+                table_rows = ""
+                for index, row in client_parcels.iterrows():
+                    row_amt = row['weight'] * inv_rate
+                    table_rows += f"""
+                    <tr>
+                        <td style='border: 1px solid black; padding: 5px; text-align: center;'>{row['date']}</td>
+                        <td style='border: 1px solid black; padding: 5px; text-align: center;'>{row['receipt_no']}</td>
+                        <td style='border: 1px solid black; padding: 5px; text-align: center;'>{row['destination']}</td>
+                        <td style='border: 1px solid black; padding: 5px; text-align: center;'>{row['weight']}</td>
+                        <td style='border: 1px solid black; padding: 5px; text-align: center;'>{row_amt:.2f}</td>
+                    </tr>
+                    """
+                
+                # Construct exact HTML
+                reprint_html = f"""
+                <div style="background-color: white; color: black; padding: 30px; border: 2px solid black; font-family: Arial, sans-serif; max-width: 800px; margin: auto;">
+                    <h1 style="text-align: center; margin: 0; font-size: 28px; font-weight: bold;">RAMDEV SUPER SERVICE</h1>
+                    <p style="text-align: center; margin: 5px 0 0 0; font-size: 14px;">
+                        53/54, dulanbi kasam chawl, S.L Matkar Marg, Prabhadevi-400025<br>
+                        <strong>GSTIN: 27ADPPR2190E1ZA</strong>
+                    </p>
+                    <h3 style="text-align: center; text-decoration: underline; margin-top: 15px; margin-bottom: 25px;">MONTHLY INVOICE</h3>
+                    
+                    <table style="width: 100%; margin-bottom: 20px; font-size: 14px; border: none;">
+                        <tr>
+                            <td style="width: 60%; vertical-align: top;">
+                                <strong>Billed To:</strong><br>
+                                Client Name: <strong>{inv_client}</strong><br>
+                                Client GSTIN: {c_gst}<br>
+                                Address: {c_add}<br>
+                                Phone: {c_ph}
+                            </td>
+                            <td style="width: 40%; vertical-align: top; text-align: right;">
+                                <strong>Invoice No:</strong> {selected_invoice}<br>
+                                <strong>Date:</strong> {inv_date}<br>
+                                <strong>Billing Month:</strong> {inv_month}
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+                        <tr style="background-color: #f2f2f2;">
+                            <th style="border: 1px solid black; padding: 8px;">Date</th>
+                            <th style="border: 1px solid black; padding: 8px;">LR No.</th>
+                            <th style="border: 1px solid black; padding: 8px;">Dest</th>
+                            <th style="border: 1px solid black; padding: 8px;">Weight</th>
+                            <th style="border: 1px solid black; padding: 8px;">Amt (₹)</th>
+                        </tr>
+                        {table_rows}
+                        <tr>
+                            <th colspan="3" style="text-align: right; border: 1px solid black; padding: 8px;">Total Weight:</th>
+                            <th style="border: 1px solid black; padding: 8px; text-align: center;">{inv_weight:.2f}</th>
+                            <th style="border: 1px solid black; padding: 8px;"></th>
+                        </tr>
+                        <tr>
+                            <th colspan="4" style="text-align: right; border: 1px solid black; padding: 8px;">Total Minimum Applicable:</th>
+                            <th style="border: 1px solid black; padding: 8px; text-align: center;">{inv_min:.2f}</th>
+                        </tr>
+                        <tr>
+                            <th colspan="4" style="text-align: right; border: 1px solid black; padding: 8px; font-size: 16px;">Total Amount:</th>
+                            <th style="border: 1px solid black; padding: 8px; font-size: 16px; text-align: center;">₹ {inv_final:.2f}</th>
+                        </tr>
+                    </table>
+                    
+                    <table style="width: 100%; font-size: 14px; border: none; margin-top: 30px;">
+                        <tr>
+                            <td style="width: 60%; vertical-align: bottom;">
+                                <strong>Bank Details for Payment:</strong><br>
+                                Bank Name: Bharat co-operative Bank Ltd.<br>
+                                Branch: Vasai Branch<br>
+                                Account No: 002412100017543<br>
+                                IFSC Code: BCBM0000025
+                            </td>
+                            <td style="width: 40%; text-align: right; vertical-align: bottom;">
+                                <br><br><br><br>
+                                _________________________<br>
+                                <strong>Authorized Signatory</strong>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                """
+                components.html(reprint_html, height=800, scrolling=True)
